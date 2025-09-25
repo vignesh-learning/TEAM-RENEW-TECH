@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Microgrid Renewable Energy Monitoring — SIH Project</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#94a3b8; --accent:#06b6d4; --glass: rgba(255,255,255,0.03);
+      color-scheme: dark;
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071026 0%, #071a2a 100%);color:#e6eef6;margin:0;padding:28px}
+    .container{max-width:1200px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#22c1c3);display:flex;align-items:center;justify-content:center;font-weight:700;color:#04202a}
+    h1{font-size:18px;margin:0}
+    p.sub{color:var(--muted);margin:0;font-size:13px}
+
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+
+    .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}
+    .span-3{grid-column:span 3}
+    .span-6{grid-column:span 6}
+    .span-9{grid-column:span 9}
+    .span-12{grid-column:span 12}
+
+    .metric{display:flex;flex-direction:column;gap:6px}
+    .metric .value{font-size:20px;font-weight:600}
+    .metric .label{color:var(--muted);font-size:12px}
+
+    .kpi-row{display:flex;gap:12px}
+    .kpi{flex:1;padding:12px;border-radius:10px;background:var(--glass);}
+
+    .chart-wrap{height:260px}
+
+    .img-box{height:260px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03)}
+    .img-box img{max-width:100%;max-height:100%;object-fit:cover}
+
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:linear-gradient(90deg,#0ea5a9,#06b6d4);border:none;padding:8px 12px;border-radius:8px;color:#04202a;font-weight:600;cursor:pointer}
+    .ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+
+    #notifList li{border-bottom:1px solid rgba(255,255,255,0.05);padding:6px 0}
+
+    @media (max-width:900px){
+      .span-3,.span-6,.span-9{grid-column:span 12}
+      header{flex-direction:column;align-items:flex-start;gap:12px}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">MG</div>
+        <div>
+          <h1>Microgrid Renewable Monitoring</h1>
+          <p class="sub"> Live monitoring dashboard for microgrid | PV, Battery, Load, Grid</p>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="ghost" id="refreshBtn">Refresh</button>
+        <button class="btn" id="downloadCsv">Export CSV</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- KPIs -->
+      <section class="card span-9">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="display:flex;gap:12px;align-items:center">
+            <h3 style="margin:0">Live Overview</h3>
+            <span style="color:var(--muted);font-size:13px">Updated: <strong id="lastUpdated">--</strong></span>
+          </div>
+          <div style="color:var(--muted);font-size:13px">System ID: <strong>MG-01</strong></div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi" >
+            <div class="metric">
+              <div class="value" id="pvPower">0 kW</div>
+              <div class="label">PV Generation</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="metric">
+              <div class="value" id="batterySOC">0 %</div>
+              <div class="label">Battery SOC</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="metric">
+              <div class="value" id="loadPower">0 kW</div>
+              <div class="label">Load</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="metric">
+              <div class="value" id="voltage">0 V</div>
+              <div class="label">Voltage</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="metric">
+              <div class="value" id="current">0 A</div>
+              <div class="label">Current</div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="metric">
+              <div class="value" id="powerFactor">0.00</div>
+              <div class="label">Power Factor</div>
+            </div>
+          </div>
+        </div>
+        
+        <div style="margin-top:16px" class="chart-wrap card">
+          <canvas id="powerChart"></canvas>
+        </div>
+      </section>
+
+      <!-- Side image + small stats -->
+      <aside class="card span-3">
+        <h4 style="margin-top:0">Site Snapshot</h4>
+        <div class="img-box" id="siteImage">
+          <img src="assets/placeholder-site.jpg" alt="Site image (replace this)" id="sitePic">
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-direction:column">
+          <div style="display:flex;justify-content:space-between"><small class="sub">Inverter Status</small><strong id="invStatus">OK</strong></div>
+          <div style="display:flex;justify-content:space-between"><small class="sub">Grid Connected</small><strong id="gridStatus">Yes</strong></div>
+          <div style="display:flex;justify-content:space-between"><small class="sub">Total Energy Today</small><strong id="energyToday">0 kWh</strong></div>
+        </div>
+      </aside>
+
+      <!-- Bottom wide: system details and table -->
+      <section class="card span-12">
+        <h4 style="margin-top:0">Recent telemetry</h4>
+        <div style="overflow:auto;margin-top:12px">
+          <table id="telemetryTable" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead style="color:var(--muted);text-align:left;border-bottom:1px solid rgba(255,255,255,0.03)">
+              <tr><th style="padding:8px">Time</th><th style="padding:8px">PV (kW)</th><th style="padding:8px">Battery (%)</th><th style="padding:8px">Load (kW)</th><th style="padding:8px">Grid (kW)</th></tr>
+            </thead>
+            <tbody id="telemetryBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Notification panel -->
+      <section class="card span-12" id="notifSection">
+        <h4 style="margin-top:0">Notifications & Alerts</h4>
+        <ul id="notifList"></ul>
+      </section>
+
+    </main>
+
+    <footer>
+      Built for Smart India Hackathon — renewable energy monitoring demo
+    </footer>
+  </div>
+
+  <!-- SOS alarm sound -->
+  <audio id="sosSound" src="Loud_Alarm_Clock_Buzzer-Muk1984-493547174.mp3" preload="auto" loop></audio>
+
+  <script>
+    function pad(n){return n<10? '0'+n: n}
+    function nowTime(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())}
+
+    // Generate random telemetry
+    const telemetry = []
+    for(let i=11;i>=0;i--){
+      const t = new Date(Date.now() - i*5*60*1000)
+      telemetry.push({time:t.toISOString(), pv: (Math.random()*5+1).toFixed(2), batt: (Math.random()*60+20).toFixed(0), load:(Math.random()*4+0.5).toFixed(2), grid:(Math.random()*2-0.5).toFixed(2), voltage: (Math.random()*40+210).toFixed(0),current: (Math.random()*8+1).toFixed(1),pf: (Math.random()*0.2+0.8).toFixed(2)})
+    }
+
+    // Refresh UI
+    function refreshUI(){
+      const last = telemetry[telemetry.length-1]
+      document.getElementById('pvPower').innerText = last.pv + ' kW'
+      document.getElementById('batterySOC').innerText = last.batt + ' %'
+      document.getElementById('loadPower').innerText = last.load + ' kW'
+      document.getElementById('voltage').innerText = last.voltage + ' V'
+      document.getElementById('current').innerText = last.current + ' A'
+      document.getElementById('powerFactor').innerText = last.pf
+      document.getElementById('lastUpdated').innerText = nowTime()
+      document.getElementById('energyToday').innerText = (Math.random()*20+5).toFixed(2) + ' kWh'
+
+      const invStatus = Math.random()>0.03? 'OK':'Fault'
+      document.getElementById('invStatus').innerText = invStatus
+      const gridStatus = (parseFloat(last.grid) > -0.5) ? 'Yes':'No'
+      document.getElementById('gridStatus').innerText = gridStatus
+
+      const tbody = document.getElementById('telemetryBody')
+      tbody.innerHTML = ''
+      for(let i=telemetry.length-1;i>=0;i--){
+        const r = telemetry[i]
+        const tr = document.createElement('tr')
+        tr.innerHTML = `<td style="padding:8px">${new Date(r.time).toLocaleString()}</td><td style="padding:8px">${r.pv}</td><td style="padding:8px">${r.batt}</td><td style="padding:8px">${r.load}</td><td style="padding:8px">${r.grid}</td>`
+        tbody.appendChild(tr)
+      }
+
+      const labels = telemetry.map(t=> new Date(t.time).toLocaleTimeString())
+      const pvData = telemetry.map(t=> t.pv)
+      const loadData = telemetry.map(t=> t.load)
+      powerChart.data.labels = labels
+      powerChart.data.datasets[0].data = pvData
+      powerChart.data.datasets[1].data = loadData
+      powerChart.update()
+
+      checkAlerts(last, invStatus, gridStatus)
+    }
+
+    const ctx = document.getElementById('powerChart')
+    const powerChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: telemetry.map(t=> new Date(t.time).toLocaleTimeString()),
+        datasets: [
+          {label:'PV (kW)', data: telemetry.map(t=> t.pv), tension:0.3, fill:true},
+          {label:'Load (kW)', data: telemetry.map(t=> t.load), tension:0.3, fill:false}
+        ]
+      },
+      options: {
+        responsive:true,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{labels:{color:'#cfe9f3'}}},
+        scales:{x:{ticks:{color:'#9fb4c6'}}, y:{ticks:{color:'#9fb4c6'}}}
+      }
+    })
+
+    setInterval(()=>{
+      const t = new Date().toISOString()
+      const newPoint = {time:t, pv:(Math.random()*5+1).toFixed(2), batt:(Math.random()*60+20).toFixed(0), load:(Math.random()*4+0.5).toFixed(2), grid:(Math.random()*2-0.5).toFixed(2), voltage: (Math.random()*40+210).toFixed(0), current: (Math.random()*8+1).toFixed(1), pf: (Math.random()*0.2+0.8).toFixed(2)}
+      telemetry.push(newPoint)
+      if(telemetry.length>36) telemetry.shift()
+      refreshUI()
+    },8000)
+
+    document.getElementById('refreshBtn').addEventListener('click', ()=> refreshUI())
+    document.getElementById('downloadCsv').addEventListener('click', ()=>{
+      let csv = 'time,pv_kW,battery_pct,load_kW,grid_kW\n'
+      telemetry.forEach(r=> csv += `${r.time},${r.pv},${r.batt},${r.load},${r.grid}\n`)
+      const blob = new Blob([csv],{type:'text/csv'})
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download='telemetry.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    })
+
+    const sitePic = document.getElementById('sitePic')
+    const imgBox = document.getElementById('siteImage')
+    imgBox.addEventListener('drop', async (e)=>{
+      e.preventDefault()
+      const f = e.dataTransfer.files[0]
+      if(!f) return
+      const url = URL.createObjectURL(f)
+      sitePic.src = url
+    })
+    imgBox.addEventListener('dragover', (e)=> e.preventDefault())
+
+    // Notification permission
+    if ("Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+
+    function checkAlerts(last, invStatus, gridStatus){
+      const sos = document.getElementById('sosSound');
+      let alertMsg = "";
+      let solution = "";
+
+      if(parseInt(last.batt) < 20){
+        alertMsg += "⚠️ Battery Low ("+last.batt+"%)\n";
+        solution += "🔋 Reduce load or charge battery.\n";
+      }
+      if(invStatus === "Fault"){
+        alertMsg += "⚠️ Inverter Fault\n";
+        solution += "🛠️ Check inverter connections & restart.\n";
+      }
+      if(gridStatus === "No"){
+        alertMsg += "⚠️ Grid Disconnected\n";
+        solution += "🔌 Verify grid supply & breaker.\n";
+      }
+
+      if(alertMsg){
+        if(sos.paused) sos.play().catch(()=>{});
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("🚨 Microgrid Alert", {
+            body: alertMsg + "\n" + solution,
+            icon: "assets/placeholder-site.jpg"
+          });
+        }
+
+        const notifList = document.getElementById("notifList");
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>[${nowTime()}]</strong><br>${alertMsg.replace(/\n/g,"<br>")}<em style="color:#0ff"><br>${solution.replace(/\n/g,"<br>")}</em>`;
+        notifList.prepend(li);
+
+      } else {
+        if(!sos.paused) sos.pause();
+      }
+    }
+
+    refreshUI()
+  </script>
+</body>
+</html>
